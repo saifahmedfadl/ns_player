@@ -40,24 +40,28 @@ class VideoQualityPicker extends StatelessWidget {
     // });
     return SingleChildScrollView(
       child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: List.generate(videoData.length,(index)=> ListTile(
-              leading: Icon(
-                Icons.check,
-                color: videoData[index].dataQuality == selectedQuality
-                    ?  Colors.green
-                    :  Colors.transparent,
-                size: 20,),
-              title: Text(videoData[index].dataQuality.toString() == 'Auto'
-                  ? 'Auto (Recommended)'
-                  : '${videoData[index].dataQuality.toString().split('x').last}p',
-              style: const TextStyle(fontSize: 14)),
-              onTap: () {
-                    onQualitySelected?.call(videoData[index]);
-                 },
-               ),
-              ),
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(
+          videoData.length,
+          (index) => ListTile(
+            leading: Icon(
+              Icons.check,
+              color: videoData[index].dataQuality == selectedQuality
+                  ? Colors.green
+                  : Colors.transparent,
+              size: 20,
             ),
-          );
-        }
-      }
+            title: Text(
+                videoData[index].dataQuality.toString() == 'Auto'
+                    ? 'Auto (Recommended)'
+                    : '${videoData[index].dataQuality.toString().split('x').last}p',
+                style: const TextStyle(fontSize: 14)),
+            onTap: () {
+              onQualitySelected?.call(videoData[index]);
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
