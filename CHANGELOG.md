@@ -1,3 +1,7 @@
+## 0.0.5
+* Fixed code formatting to achieve 50/50 static analysis score
+* Formatted file_utils.dart and video_quality_picker.dart
+
 ## 0.0.4
 * Fixed static analysis issues (50/50 points):
   - Removed unnecessary library name declaration
