@@ -1,3 +1,12 @@
+## 0.0.4
+* Fixed static analysis issues (50/50 points):
+  - Removed unnecessary library name declaration
+  - Replaced deprecated `withOpacity` with `withValues(alpha:)` across all files
+  - Added const constructor to immutable widgets
+  - Added missing type annotations
+* Code formatting improvements
+* Improved code quality and maintainability
+
 ## 0.0.3
 * Updated dependencies to latest versions:
   - http: ^1.6.0

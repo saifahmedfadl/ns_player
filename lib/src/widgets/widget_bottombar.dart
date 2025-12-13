@@ -6,7 +6,7 @@ import 'package:video_player/video_player.dart';
 /// Widget use to display the bottom bar buttons and the time texts
 class PlayerBottomBar extends StatelessWidget {
   /// Constructor
-  PlayerBottomBar({
+  const PlayerBottomBar({
     super.key,
     required this.controller,
     required this.showBottomBar,
@@ -51,7 +51,9 @@ class PlayerBottomBar extends StatelessWidget {
     return Visibility(
       visible: showBottomBar,
       child: Padding(
-        padding: fullScreen ? const EdgeInsets.symmetric(horizontal: 20) : videoStyle.bottomBarPadding,
+        padding: fullScreen
+            ? const EdgeInsets.symmetric(horizontal: 20)
+            : videoStyle.bottomBarPadding,
         child: AspectRatio(
           aspectRatio: 16 / 9,
           child: Stack(
@@ -66,9 +68,12 @@ class PlayerBottomBar extends StatelessWidget {
                 child: Align(
                   alignment: Alignment.center,
                   child: Padding(
-                    padding: videoStyle.videoDurationsPadding ?? const EdgeInsets.only(top: 8.0),
+                    padding: videoStyle.videoDurationsPadding ??
+                        const EdgeInsets.only(top: 8.0),
                     child: SizedBox(
-                      width: fullScreen ? MediaQuery.of(context).size.width / 3 : MediaQuery.of(context).size.width / 2,
+                      width: fullScreen
+                          ? MediaQuery.of(context).size.width / 3
+                          : MediaQuery.of(context).size.width / 2,
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         mainAxisSize: MainAxisSize.max,
@@ -83,7 +88,7 @@ class PlayerBottomBar extends StatelessWidget {
                             child: Container(
                                 padding: const EdgeInsets.all(5),
                                 decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.5),
+                                  color: Colors.black.withValues(alpha: 0.5),
                                   shape: BoxShape.circle,
                                 ),
                                 child: videoStyle.backwardIcon ??
@@ -100,22 +105,34 @@ class PlayerBottomBar extends StatelessWidget {
                               var defaultIcon = Container(
                                 padding: const EdgeInsets.all(5),
                                 decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.5),
+                                  color: Colors.black.withValues(alpha: 0.5),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
-                                  controller.value.isPlaying ? Icons.pause_outlined : Icons.play_arrow_outlined,
-                                  color: videoStyle.playButtonIconColor ?? Colors.white,
+                                  controller.value.isPlaying
+                                      ? Icons.pause_outlined
+                                      : Icons.play_arrow_outlined,
+                                  color: videoStyle.playButtonIconColor ??
+                                      Colors.white,
                                   size: fullScreen ? 35 : 30,
                                   // videoStyle.playButtonIconSize ?? (fullScreen ? 35: 25),
                                 ),
                               );
-                              if (videoStyle.playIcon != null && videoStyle.pauseIcon == null) {
-                                return controller.value.isPlaying ? defaultIcon : videoStyle.playIcon;
-                              } else if (videoStyle.pauseIcon != null && videoStyle.playIcon == null) {
-                                return controller.value.isPlaying ? videoStyle.pauseIcon : defaultIcon;
-                              } else if (videoStyle.playIcon != null && videoStyle.pauseIcon != null) {
-                                return controller.value.isPlaying ? videoStyle.pauseIcon : videoStyle.playIcon;
+                              if (videoStyle.playIcon != null &&
+                                  videoStyle.pauseIcon == null) {
+                                return controller.value.isPlaying
+                                    ? defaultIcon
+                                    : videoStyle.playIcon;
+                              } else if (videoStyle.pauseIcon != null &&
+                                  videoStyle.playIcon == null) {
+                                return controller.value.isPlaying
+                                    ? videoStyle.pauseIcon
+                                    : defaultIcon;
+                              } else if (videoStyle.playIcon != null &&
+                                  videoStyle.pauseIcon != null) {
+                                return controller.value.isPlaying
+                                    ? videoStyle.pauseIcon
+                                    : videoStyle.playIcon;
                               }
                               return defaultIcon;
                             }(),
@@ -129,7 +146,7 @@ class PlayerBottomBar extends StatelessWidget {
                             child: Container(
                               padding: const EdgeInsets.all(5),
                               decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.5),
+                                color: Colors.black.withValues(alpha: 0.5),
                                 shape: BoxShape.circle,
                               ),
                               child: videoStyle.forwardIcon ??
@@ -193,9 +210,11 @@ class PlayerBottomBar extends StatelessWidget {
                             const VideoProgressColors(
                               playedColor: Color.fromARGB(255, 206, 3, 3),
                               bufferedColor: Color.fromARGB(169, 77, 68, 68),
-                              backgroundColor: Color.fromARGB(27, 255, 255, 255),
+                              backgroundColor:
+                                  Color.fromARGB(27, 255, 255, 255),
                             ),
-                        padding: videoStyle.progressIndicatorPadding ?? const EdgeInsets.only(top: 10.0),
+                        padding: videoStyle.progressIndicatorPadding ??
+                            const EdgeInsets.only(top: 10.0),
                       ),
                     ),
                     fullScreen

@@ -149,7 +149,8 @@ class NsPlayer extends StatefulWidget {
   State<NsPlayer> createState() => _NsPlayerState();
 }
 
-class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin {
+class _NsPlayerState extends State<NsPlayer>
+    with SingleTickerProviderStateMixin {
   /// Video play type (hls,mp4,mkv,offline)
   String? playType;
 
@@ -245,9 +246,12 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
     urlCheck(widget.url);
 
     /// Control bar animation
-    controlBarAnimationController = AnimationController(duration: const Duration(milliseconds: 300), vsync: this);
-    controlTopBarAnimation = Tween(begin: -(36.0 + 0.0 * 2), end: 0.0).animate(controlBarAnimationController);
-    controlBottomBarAnimation = Tween(begin: -(36.0 + 0.0 * 2), end: 0.0).animate(controlBarAnimationController);
+    controlBarAnimationController = AnimationController(
+        duration: const Duration(milliseconds: 300), vsync: this);
+    controlTopBarAnimation = Tween(begin: -(36.0 + 0.0 * 2), end: 0.0)
+        .animate(controlBarAnimationController);
+    controlBottomBarAnimation = Tween(begin: -(36.0 + 0.0 * 2), end: 0.0)
+        .animate(controlBarAnimationController);
 
     WidgetsBinding.instance.addPostFrameCallback((callback) {
       WidgetsBinding.instance.addPersistentFrameCallback((callback) {
@@ -309,7 +313,9 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
   @override
   Widget build(BuildContext context) {
     return AspectRatio(
-      aspectRatio: fullScreen ? MediaQuery.of(context).size.calculateAspectRatio() : widget.aspectRatio,
+      aspectRatio: fullScreen
+          ? MediaQuery.of(context).size.calculateAspectRatio()
+          : widget.aspectRatio,
       child: controller.value.isInitialized
           ? Stack(
               children: <Widget>[
@@ -327,7 +333,9 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
                       aspectRatio: controller.value.aspectRatio,
                       child: Container(
                           foregroundDecoration: BoxDecoration(
-                            color: showMenu ? Colors.black.withOpacity(0.2) : Colors.transparent,
+                            color: showMenu
+                                ? Colors.black.withValues(alpha: 0.2)
+                                : Colors.transparent,
                           ),
                           child: VideoPlayer(
                             controller,
@@ -338,7 +346,8 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
                 ...videoBuiltInChildren(),
               ],
             )
-          : VideoLoading(loadingStyle: widget.videoLoadingStyle, thumbUrl: widget.url),
+          : VideoLoading(
+              loadingStyle: widget.videoLoadingStyle, thumbUrl: widget.url),
     );
   }
 
@@ -367,7 +376,8 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
                             colors: const VideoProgressColors(
                               playedColor: Color.fromARGB(255, 206, 3, 3),
                               bufferedColor: Color.fromARGB(169, 77, 68, 68),
-                              backgroundColor: Color.fromARGB(27, 255, 255, 255),
+                              backgroundColor:
+                                  Color.fromARGB(27, 255, 255, 255),
                             ),
                             padding: EdgeInsets.zero,
                           ),
@@ -503,13 +513,16 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
                     height: widget.videoStyle.liveDirectButtonSize,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: isAtLivePosition ? widget.videoStyle.liveDirectButtonColor : widget.videoStyle.liveDirectButtonDisableColor,
+                      color: isAtLivePosition
+                          ? widget.videoStyle.liveDirectButtonColor
+                          : widget.videoStyle.liveDirectButtonDisableColor,
                     ),
                   ),
                   const SizedBox(width: 8.0),
                   Text(
                     widget.videoStyle.liveDirectButtonText ?? 'Live',
-                    style: widget.videoStyle.liveDirectButtonTextStyle ?? const TextStyle(color: Colors.white, fontSize: 16.0),
+                    style: widget.videoStyle.liveDirectButtonTextStyle ??
+                        const TextStyle(color: Colors.white, fontSize: 16.0),
                   ),
                 ],
               ),
@@ -522,7 +535,8 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
 
   /// Video quality list
   Widget m3u8List() {
-    RenderBox? renderBox = videoQualityKey.currentContext?.findRenderObject() as RenderBox?;
+    RenderBox? renderBox =
+        videoQualityKey.currentContext?.findRenderObject() as RenderBox?;
     var offset = renderBox?.localToGlobal(Offset.zero);
     return VideoQualityPicker(
       videoData: m3u8UrlList,
@@ -536,7 +550,8 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
             m3u8Quality = data.dataQuality ?? m3u8Quality;
           });
           onSelectQuality(data);
-          print("--- Quality select ---\nquality : ${data.dataQuality}\nlink : ${data.dataURL}");
+          print(
+              "--- Quality select ---\nquality : ${data.dataQuality}\nlink : ${data.dataURL}");
         }
         setState(() {
           m3u8Show = false;
@@ -638,7 +653,8 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
     } else {
       setState(() {
         isOffline = true;
-        print("--- Current Video Status ---\noffline : $isOffline \n --- :3 Done url check ---");
+        print(
+            "--- Current Video Status ---\noffline : $isOffline \n --- :3 Done url check ---");
       });
 
       videoControlSetup(url);
@@ -672,15 +688,18 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
     }
 
     if (m3u8Content == null && videoUrl != null) {
-      http.Response response = await http.get(Uri.parse(videoUrl), headers: widget.headers);
+      http.Response response =
+          await http.get(Uri.parse(videoUrl), headers: widget.headers);
       if (response.statusCode == 200) {
         m3u8Content = utf8.decode(response.bodyBytes);
 
         List<File> cachedFiles = [];
         int index = 0;
 
-        List<RegExpMatch> matches = regExp.allMatches(m3u8Content ?? '').toList();
-        print("--- HLS Data ----\n$m3u8Content \nTotal length: ${m3u8UrlList.length} \nFinish!!!");
+        List<RegExpMatch> matches =
+            regExp.allMatches(m3u8Content ?? '').toList();
+        print(
+            "--- HLS Data ----\n$m3u8Content \nTotal length: ${m3u8UrlList.length} \nFinish!!!");
 
         for (RegExpMatch regExpMatch in matches) {
           String quality = (regExpMatch.group(1)).toString();
@@ -693,7 +712,8 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
           if (isNetwork) {
             url = sourceURL;
           } else {
-            print('Match: ${match?.pattern} --- ${match?.groupNames} --- ${match?.input}');
+            print(
+                'Match: ${match?.pattern} --- ${match?.groupNames} --- ${match?.input}');
             final dataURL = match?.group(0);
             url = "$dataURL$sourceURL";
             print("--- HLS child url integration ---\nChild url :$url");
@@ -705,7 +725,8 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
             String auURL = audioURL;
 
             if (!isNetwork) {
-              print('Match: ${match?.pattern} --- ${match?.groupNames} --- ${match?.input}');
+              print(
+                  'Match: ${match?.pattern} --- ${match?.groupNames} --- ${match?.input}');
               final auDataURL = match!.group(0);
               auURL = "$auDataURL$audioURL";
               print("Url network audio  $url $audioURL");
@@ -718,7 +739,8 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
           String audio = "";
           print("-- Audio ---\nAudio list length: ${audio.length}");
           if (audioList.isNotEmpty) {
-            audio = """#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio-medium",NAME="audio",AUTOSELECT=YES,DEFAULT=YES,CHANNELS="2",
+            audio =
+                """#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio-medium",NAME="audio",AUTOSELECT=YES,DEFAULT=YES,CHANNELS="2",
                   URI="${audioList.last.url}"\n""";
           } else {
             audio = "";
@@ -727,7 +749,8 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
           if (widget.allowCacheFile) {
             try {
               var file = await FileUtils.cacheFileUsingWriteAsString(
-                contents: """#EXTM3U\n#EXT-X-INDEPENDENT-SEGMENTS\n$audio#EXT-X-STREAM-INF:CLOSED-CAPTIONS=NONE,BANDWIDTH=1469712,
+                contents:
+                    """#EXTM3U\n#EXT-X-INDEPENDENT-SEGMENTS\n$audio#EXT-X-STREAM-INF:CLOSED-CAPTIONS=NONE,BANDWIDTH=1469712,
                   RESOLUTION=$quality,FRAME-RATE=30.000\n$url""",
                 quality: quality,
                 videoUrl: url,
@@ -740,7 +763,8 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
               }
 
               if (widget.allowCacheFile && index == matches.length) {
-                widget.onCacheFileCompleted?.call(cachedFiles.isEmpty ? null : cachedFiles);
+                widget.onCacheFileCompleted
+                    ?.call(cachedFiles.isEmpty ? null : cachedFiles);
               }
             } catch (e) {
               print("Couldn't write file: $e");
@@ -875,7 +899,8 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
 
   void videoInit(String? url) {
     if (isOffline == false) {
-      print("--- Player status ---\nplay url : $url\noffline : $isOffline\n--- start playing –––");
+      print(
+          "--- Player status ---\nplay url : $url\noffline : $isOffline\n--- start playing –––");
 
       if (playType == "MP4" || playType == "WEBM") {
         // Play MP4 and WEBM video
@@ -909,7 +934,8 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
           });
       }
     } else {
-      print("--- Player status ---\nplay url : $url\noffline : $isOffline\n--- start playing –––");
+      print(
+          "--- Player status ---\nplay url : $url\noffline : $isOffline\n--- start playing –––");
       hideQualityList = true;
       controller = VideoPlayerController.file(
         File(url!),
@@ -924,7 +950,7 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
     }
   }
 
-  void _navigateLocally(context) async {
+  void _navigateLocally(BuildContext context) async {
     if (!fullScreen) {
       if (ModalRoute.of(context)?.willHandlePopInternally ?? false) {
         Navigator.of(context).pop();
@@ -945,7 +971,8 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
     } else {
       try {
         String text;
-        var file = await FileUtils.readFileFromPath(videoUrl: data.dataURL ?? '', quality: data.dataQuality ?? '');
+        var file = await FileUtils.readFileFromPath(
+            videoUrl: data.dataURL ?? '', quality: data.dataQuality ?? '');
         if (file != null) {
           print("Start reading file");
           text = await file.readAsString();
@@ -987,7 +1014,9 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
     print('Video list length: ${m3u8UrlList.length}');
     for (int i = 2; i < m3u8UrlList.length; i++) {
       try {
-        var file = await FileUtils.readFileFromPath(videoUrl: m3u8UrlList[i].dataURL ?? '', quality: m3u8UrlList[i].dataQuality ?? '');
+        var file = await FileUtils.readFileFromPath(
+            videoUrl: m3u8UrlList[i].dataURL ?? '',
+            quality: m3u8UrlList[i].dataQuality ?? '');
         var exists = await file?.exists();
         if (exists ?? false) {
           await file?.delete();
@@ -1050,7 +1079,7 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
                       width: 70,
                       height: 5,
                       decoration: BoxDecoration(
-                        color: Colors.grey.withOpacity(0.5),
+                        color: Colors.grey.withValues(alpha: 0.5),
                         borderRadius: BorderRadius.circular(10.0),
                       ),
                       child: const Text(''),
@@ -1065,7 +1094,8 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
                         m3u8Quality = data.dataQuality ?? m3u8Quality;
                       });
                       onSelectQuality(data);
-                      print("--- Quality select ---\nquality : ${data.dataQuality}\nlink : ${data.dataURL}");
+                      print(
+                          "--- Quality select ---\nquality : ${data.dataQuality}\nlink : ${data.dataURL}");
                     }
                     setState(() {
                       m3u8Show = false;
@@ -1110,7 +1140,7 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
                       width: 70,
                       height: 5,
                       decoration: BoxDecoration(
-                        color: Colors.grey.withOpacity(0.5),
+                        color: Colors.grey.withValues(alpha: 0.5),
                         borderRadius: BorderRadius.circular(10.0),
                       ),
                       child: const Text(''),
@@ -1122,18 +1152,23 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
                       (index) => ListTile(
                             leading: Icon(
                               Icons.check,
-                              color: playbackSpeeds[index] == playbackSpeed ? Colors.green : Colors.transparent,
+                              color: playbackSpeeds[index] == playbackSpeed
+                                  ? Colors.green
+                                  : Colors.transparent,
                               size: 20,
                             ),
                             title: Text(
-                              playbackSpeeds[index] == 1.0 ? 'Normal' : '${playbackSpeeds[index]}x',
+                              playbackSpeeds[index] == 1.0
+                                  ? 'Normal'
+                                  : '${playbackSpeeds[index]}x',
                               style: const TextStyle(fontSize: 14),
                             ),
                             onTap: () {
                               setState(() {
                                 playbackSpeed = playbackSpeeds[index];
                               });
-                              onPlayBackSpeedChange(setPlaybackSpeed: playbackSpeed);
+                              onPlayBackSpeedChange(
+                                  setPlaybackSpeed: playbackSpeed);
                               Navigator.pop(context);
                             },
                           )),
@@ -1184,7 +1219,7 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
                       width: 70,
                       height: 5,
                       decoration: BoxDecoration(
-                        color: Colors.grey.withOpacity(0.5),
+                        color: Colors.grey.withValues(alpha: 0.5),
                         borderRadius: BorderRadius.circular(10.0),
                       ),
                       child: const Text(''),
@@ -1200,8 +1235,12 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
                       mainAxisSize: MainAxisSize.min,
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        Text(m3u8Quality.toString() == 'Auto' ? 'Auto' : '${m3u8Quality.toString().split('x').last}p',
-                            style: const TextStyle(fontSize: 12.0, color: Colors.black54)),
+                        Text(
+                            m3u8Quality.toString() == 'Auto'
+                                ? 'Auto'
+                                : '${m3u8Quality.toString().split('x').last}p',
+                            style: const TextStyle(
+                                fontSize: 12.0, color: Colors.black54)),
                         const Icon(
                           Icons.arrow_forward_ios,
                           size: 15,
@@ -1225,7 +1264,8 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
                     children: [
                       Text(
                         playbackSpeed == 1.0 ? 'Normal' : '${playbackSpeed}x',
-                        style: const TextStyle(fontSize: 12.0, color: Colors.black54),
+                        style: const TextStyle(
+                            fontSize: 12.0, color: Colors.black54),
                       ),
                       const Icon(
                         Icons.arrow_forward_ios,
@@ -1252,7 +1292,8 @@ class _NsPlayerState extends State<NsPlayer> with SingleTickerProviderStateMixin
                     children: [
                       Text(
                         loop ? 'On' : 'Off',
-                        style: const TextStyle(fontSize: 12.0, color: Colors.black54),
+                        style: const TextStyle(
+                            fontSize: 12.0, color: Colors.black54),
                       ),
                       const Icon(Icons.arrow_forward_ios, size: 15),
                     ],
