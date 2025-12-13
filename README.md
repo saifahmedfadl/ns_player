@@ -16,7 +16,7 @@ Add the following to your `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  ns_player: ^1.0.0
+  ns_player: ^0.0.3
 ```
 
 Then run 
