@@ -1,6 +1,6 @@
 name: ns_player
-description: NSPlayer is a HLS(.m3u8) video player for flutter. The NsPlayer is a video player that allows you to select HLS video streaming by selecting the quality.
-version: 0.0.5
+description: NSPlayer is a modern HLS(.m3u8) video player for Flutter with secure video downloads, YouTube-style controls, and fullscreen support.
+version: 1.0.0
 homepage: https://github.com/Nurullah-Sadekin/ns_player/blob/main/example/lib/main.dart
 repository: https://github.com/Nurullah-Sadekin/ns_player
 
@@ -16,8 +16,18 @@ dependencies:
   video_player: ^2.10.1
   wakelock_plus: ^1.4.0
   path: ^1.9.1
-  flutter_lints: ^6.0.0
+  encrypt: ^5.0.3
+  crypto: ^3.0.3
+  connectivity_plus: ^6.0.3
+  shared_preferences: ^2.2.2
+  flutter_local_notifications: ^20.0.0-dev.3
+  permission_handler: ^12.0.0+1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_lints: ^6.0.0
+
+dependency_overrides:
+  video_player_android:
+    path: ./video_player_android_fork

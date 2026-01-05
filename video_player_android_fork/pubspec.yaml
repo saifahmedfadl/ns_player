@@ -1,0 +1,21 @@
+name: video_player_android
+description: Android implementation of video_player with custom buffer control (forked).
+version: 2.10.1
+homepage: https://github.com/Nurullah-Sadekin/ns_player
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.8.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  video_player_platform_interface: ^6.2.0
+
+flutter:
+  plugin:
+    implements: video_player
+    platforms:
+      android:
+        package: com.nsplayer.ns_video_player_android
+        pluginClass: NsVideoPlayerPlugin
