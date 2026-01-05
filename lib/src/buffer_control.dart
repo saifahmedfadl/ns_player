@@ -104,9 +104,6 @@ enum BufferPreset {
 /// ));
 /// ```
 class NsBufferControl {
-  static const MethodChannel _channel =
-      MethodChannel('flutter.io/videoPlayer/android');
-
   static NsBufferConfig _currentConfig = NsBufferConfig.low;
 
   /// Get current buffer configuration
@@ -136,39 +133,40 @@ class NsBufferControl {
   /// Set custom buffer configuration
   /// Call this before creating video players
   static Future<bool> setConfig(NsBufferConfig config) async {
-    if (!Platform.isAndroid) {
-      // iOS doesn't support custom buffer config through this API
-      // but we still store the config for reference
-      _currentConfig = config;
-      return true;
-    }
+    _currentConfig = config;
+
+    // Determine the correct channel based on platform
+    final channelName = Platform.isAndroid
+        ? 'flutter.io/videoPlayer/android'
+        : 'flutter.io/videoPlayer/ios';
+
+    final channel = MethodChannel(channelName);
 
     try {
       final result =
-          await _channel.invokeMethod<bool>('setBufferConfig', config.toMap());
-      if (result == true) {
-        _currentConfig = config;
-      }
+          await channel.invokeMethod<bool>('setBufferConfig', config.toMap());
       return result ?? false;
     } on PlatformException catch (e) {
       print('NsBufferControl: Failed to set buffer config: ${e.message}');
       return false;
     } on MissingPluginException {
-      // Plugin not available, store config anyway
-      _currentConfig = config;
+      // Plugin not available, config is already stored
       return true;
     }
   }
 
   /// Get current buffer configuration from native player
   static Future<Map<String, dynamic>?> getBufferStatus() async {
-    if (!Platform.isAndroid) {
-      return _currentConfig.toMap().cast<String, dynamic>();
-    }
+    // Determine the correct channel based on platform
+    final channelName = Platform.isAndroid
+        ? 'flutter.io/videoPlayer/android'
+        : 'flutter.io/videoPlayer/ios';
+
+    final channel = MethodChannel(channelName);
 
     try {
       final result =
-          await _channel.invokeMethod<Map<dynamic, dynamic>>('getBufferConfig');
+          await channel.invokeMethod<Map<dynamic, dynamic>>('getBufferConfig');
       return result?.cast<String, dynamic>();
     } on PlatformException catch (e) {
       print('NsBufferControl: Failed to get buffer status: ${e.message}');
