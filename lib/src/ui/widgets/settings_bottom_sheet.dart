@@ -865,28 +865,28 @@ class _QualityPickerSheetState extends State<_QualityPickerSheet> {
                 color: hasEnoughSpace ? Colors.green : Colors.red,
               ),
             ],
-            // if (!hasEnoughSpace && !Platform.isIOS) ...[
-            //   const SizedBox(height: 12),
-            //   Container(
-            //     padding: const EdgeInsets.all(8),
-            //     decoration: BoxDecoration(
-            //       color: Colors.red.withValues(alpha: 0.2),
-            //       borderRadius: BorderRadius.circular(8),
-            //     ),
-            //     child: const Row(
-            //       children: [
-            //         Icon(Icons.warning_rounded, color: Colors.red, size: 20),
-            //         SizedBox(width: 8),
-            //         Expanded(
-            //           child: Text(
-            //             'Not enough storage space!',
-            //             style: TextStyle(color: Colors.red, fontSize: 13),
-            //           ),
-            //         ),
-            //       ],
-            //     ),
-            //   ),
-            // ],
+            if (!hasEnoughSpace && !Platform.isIOS) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.warning_rounded, color: Colors.red, size: 20),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Not enough storage space!',
+                        style: TextStyle(color: Colors.red, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
         actions: [
