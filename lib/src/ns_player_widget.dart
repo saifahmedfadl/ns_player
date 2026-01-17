@@ -855,6 +855,11 @@ class _NsPlayerState extends State<NsPlayer> {
             'Bearer ${widget.analyticsConfig!.authToken}';
       }
 
+      if (kDebugMode) {
+        print('Fetching with headers: ${headers.keys.toList()}');
+        print('Has Authorization: ${headers.containsKey('Authorization')}');
+      }
+
       final response = await http.get(
         Uri.parse(apiUrl),
         headers: headers,
@@ -863,6 +868,7 @@ class _NsPlayerState extends State<NsPlayer> {
       if (response.statusCode != 200) {
         if (kDebugMode) {
           print('Failed to fetch quality sizes: ${response.statusCode}');
+          print('Response body: ${response.body}');
         }
         return;
       }
