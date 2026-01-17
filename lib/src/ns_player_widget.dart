@@ -638,8 +638,13 @@ class _NsPlayerState extends State<NsPlayer> {
         // Apply preferred quality if saved
         _applyPreferredQuality();
       } else if (videoType == 'HLS') {
-        // Legacy fallback: Parse manifest for qualities
-        _fetchQualities(widget.url);
+        // Try to fetch quality sizes from backend API first
+        await _fetchQualitySizesFromApi();
+
+        // If no quality sizes from API, fall back to parsing manifest
+        if (_qualities.isEmpty || _qualities.length == 1) {
+          _fetchQualities(widget.url);
+        }
       }
     } catch (e) {
       if (kDebugMode) {
@@ -817,6 +822,102 @@ class _NsPlayerState extends State<NsPlayer> {
     // Update UI
     if (mounted) {
       setState(() {});
+    }
+  }
+
+  /// Fetch quality sizes from backend API
+  Future<void> _fetchQualitySizesFromApi() async {
+    try {
+      final videoId = _videoId;
+      if (videoId == 'Unknown') {
+        if (kDebugMode) {
+          print('Cannot fetch quality sizes: videoId is unknown');
+        }
+        return;
+      }
+
+      // Build API URL for quality sizes
+      final uri = Uri.parse(widget.url);
+      final baseUrl = '${uri.scheme}://${uri.host}';
+      final apiUrl = '$baseUrl/api/v1/videos/$videoId/quality-sizes';
+
+      if (kDebugMode) {
+        print('Fetching quality sizes from: $apiUrl');
+      }
+
+      final response = await http.get(
+        Uri.parse(apiUrl),
+        headers: widget.headers,
+      );
+
+      if (response.statusCode != 200) {
+        if (kDebugMode) {
+          print('Failed to fetch quality sizes: ${response.statusCode}');
+        }
+        return;
+      }
+
+      final data = jsonDecode(response.body);
+      if (data['success'] != true || data['data'] == null) {
+        if (kDebugMode) {
+          print('Invalid response from quality sizes API');
+        }
+        return;
+      }
+
+      final qualitiesData = data['data'] as Map<String, dynamic>;
+      final qualitiesList = qualitiesData['qualities'] as List<dynamic>?;
+
+      if (qualitiesList == null || qualitiesList.isEmpty) {
+        if (kDebugMode) {
+          print('No qualities found in API response');
+        }
+        return;
+      }
+
+      final qualities = <M3U8Data>[
+        M3U8Data(dataQuality: 'Auto', dataURL: widget.url),
+      ];
+
+      for (final q in qualitiesList) {
+        final qualityData = q as Map<String, dynamic>;
+        final quality = qualityData['quality'] as String?;
+        final width = qualityData['width'] as int?;
+        final height = qualityData['height'] as int?;
+        final sizeBytes = qualityData['sizeBytes'] as int?;
+
+        if (quality != null && width != null && height != null) {
+          // Build URL for this quality
+          final qualityUrl =
+              '${widget.url.replaceFirst('/master.m3u8', '')}/$quality/playlist.m3u8';
+
+          qualities.add(M3U8Data(
+            dataQuality: quality,
+            dataURL: qualityUrl,
+            fileSize: sizeBytes,
+            width: width,
+            height: height,
+          ));
+
+          if (kDebugMode) {
+            print(
+                'Added quality: $quality (${width}x$height) - ${sizeBytes ?? 0} bytes');
+          }
+        }
+      }
+
+      if (mounted && qualities.length > 1) {
+        setState(() {
+          _qualities = qualities;
+        });
+        if (kDebugMode) {
+          print('Loaded ${qualities.length - 1} qualities from API');
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error fetching quality sizes from API: $e');
+      }
     }
   }
 
