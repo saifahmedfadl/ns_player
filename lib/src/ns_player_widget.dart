@@ -836,10 +836,10 @@ class _NsPlayerState extends State<NsPlayer> {
         return;
       }
 
-      // Build API URL for quality sizes
+      // Build API URL for play endpoint (includes quality sizes)
       final uri = Uri.parse(widget.url);
       final baseUrl = '${uri.scheme}://${uri.host}';
-      final apiUrl = '$baseUrl/api/v1/videos/$videoId/quality-sizes';
+      final apiUrl = '$baseUrl/api/v1/videos/$videoId/play';
 
       if (kDebugMode) {
         print('Fetching quality sizes from: $apiUrl');
@@ -870,13 +870,13 @@ class _NsPlayerState extends State<NsPlayer> {
       final data = jsonDecode(response.body);
       if (data['success'] != true || data['data'] == null) {
         if (kDebugMode) {
-          print('Invalid response from quality sizes API');
+          print('Invalid response from play API');
         }
         return;
       }
 
-      final qualitiesData = data['data'] as Map<String, dynamic>;
-      final qualitiesList = qualitiesData['qualities'] as List<dynamic>?;
+      final playData = data['data'] as Map<String, dynamic>;
+      final qualitiesList = playData['qualities'] as List<dynamic>?;
 
       if (qualitiesList == null || qualitiesList.isEmpty) {
         if (kDebugMode) {
@@ -892,19 +892,18 @@ class _NsPlayerState extends State<NsPlayer> {
       for (final q in qualitiesList) {
         final qualityData = q as Map<String, dynamic>;
         final quality = qualityData['quality'] as String?;
+        final url = qualityData['url'] as String?;
         final width = qualityData['width'] as int?;
         final height = qualityData['height'] as int?;
-        final sizeBytes = qualityData['sizeBytes'] as int?;
+        final sizeBytes = qualityData['fileSize'] as int?;
+        final bandwidth = qualityData['bandwidth'] as int?;
 
-        if (quality != null && width != null && height != null) {
-          // Build URL for this quality
-          final qualityUrl =
-              '${widget.url.replaceFirst('/master.m3u8', '')}/$quality/playlist.m3u8';
-
+        if (quality != null && url != null) {
           qualities.add(M3U8Data(
             dataQuality: quality,
-            dataURL: qualityUrl,
+            dataURL: url,
             fileSize: sizeBytes,
+            bandwidth: bandwidth,
             width: width,
             height: height,
           ));
