@@ -800,6 +800,21 @@ class _QualityPickerSheetState extends State<_QualityPickerSheet> {
     // Use file size from API (backend-driven)
     final fileSize = quality.fileSize ?? 0;
 
+    // Check if video is already downloaded for this quality
+    final isDownloaded = await HlsDownloadService.isDownloaded(
+      widget.videoId,
+      quality.dataQuality ?? '',
+    );
+
+    // Get downloaded size if already downloaded
+    int? downloadedSize;
+    if (isDownloaded) {
+      downloadedSize = await HlsDownloadService.getDownloadedSize(
+        widget.videoId,
+        quality.dataQuality ?? '',
+      );
+    }
+
     // Check available storage
     final availableStorage = await _getAvailableStorage();
     final hasEnoughSpace = availableStorage > fileSize;
@@ -830,6 +845,16 @@ class _QualityPickerSheetState extends State<_QualityPickerSheet> {
               quality.fileSizeFormatted,
               Icons.storage_rounded,
             ),
+            // Show downloaded size if already downloaded
+            if (isDownloaded && downloadedSize != null) ...[
+              const SizedBox(height: 8),
+              _buildInfoRow(
+                'Downloaded size',
+                _formatBytes(downloadedSize),
+                Icons.download_done_rounded,
+                color: Colors.green,
+              ),
+            ],
             // Only show available storage on Android (iOS storage APIs are unreliable)
             if (!Platform.isIOS) ...[
               const SizedBox(height: 8),
@@ -840,28 +865,28 @@ class _QualityPickerSheetState extends State<_QualityPickerSheet> {
                 color: hasEnoughSpace ? Colors.green : Colors.red,
               ),
             ],
-            if (!hasEnoughSpace && !Platform.isIOS) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.warning_rounded, color: Colors.red, size: 20),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Not enough storage space!',
-                        style: TextStyle(color: Colors.red, fontSize: 13),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            // if (!hasEnoughSpace && !Platform.isIOS) ...[
+            //   const SizedBox(height: 12),
+            //   Container(
+            //     padding: const EdgeInsets.all(8),
+            //     decoration: BoxDecoration(
+            //       color: Colors.red.withValues(alpha: 0.2),
+            //       borderRadius: BorderRadius.circular(8),
+            //     ),
+            //     child: const Row(
+            //       children: [
+            //         Icon(Icons.warning_rounded, color: Colors.red, size: 20),
+            //         SizedBox(width: 8),
+            //         Expanded(
+            //           child: Text(
+            //             'Not enough storage space!',
+            //             style: TextStyle(color: Colors.red, fontSize: 13),
+            //           ),
+            //         ),
+            //       ],
+            //     ),
+            //   ),
+            // ],
           ],
         ),
         actions: [
