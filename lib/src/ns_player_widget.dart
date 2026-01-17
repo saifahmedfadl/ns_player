@@ -845,9 +845,19 @@ class _NsPlayerState extends State<NsPlayer> {
         print('Fetching quality sizes from: $apiUrl');
       }
 
+      // Use auth headers from widget if available, otherwise use analytics auth token
+      final headers = Map<String, String>.from(widget.headers ?? {});
+
+      // Try to add Authorization header if not present
+      if (!headers.containsKey('Authorization') &&
+          widget.analyticsConfig?.authToken != null) {
+        headers['Authorization'] =
+            'Bearer ${widget.analyticsConfig!.authToken}';
+      }
+
       final response = await http.get(
         Uri.parse(apiUrl),
-        headers: widget.headers,
+        headers: headers,
       );
 
       if (response.statusCode != 200) {
