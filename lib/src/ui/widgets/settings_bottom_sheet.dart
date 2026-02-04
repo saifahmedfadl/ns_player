@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
@@ -20,6 +21,10 @@ class SettingsBottomSheet extends StatefulWidget {
   final void Function(double speed) onSpeedSelected;
   final void Function(bool loop) onLoopToggled;
 
+  /// Callback when download completes (for analytics tracking)
+  final void Function(String quality, int actualSize, int durationMs)?
+      onDownloadComplete;
+
   const SettingsBottomSheet({
     super.key,
     required this.qualities,
@@ -31,6 +36,7 @@ class SettingsBottomSheet extends StatefulWidget {
     required this.onQualitySelected,
     required this.onSpeedSelected,
     required this.onLoopToggled,
+    this.onDownloadComplete,
   });
 
   @override
@@ -38,57 +44,50 @@ class SettingsBottomSheet extends StatefulWidget {
 }
 
 class _SettingsBottomSheetState extends State<SettingsBottomSheet> {
+  static const Color _glassBase = Color(0x1AFFFFFF);
+  static const Color _glassHighlight = Color(0x33FFFFFF);
+  static const Color _glassBorder = Color(0x4DFFFFFF);
+  static const Color _accent = Color(0xFF67E8F9);
   final List<double> _speeds = [0.75, 1.0, 1.25, 1.5, 2.0];
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF212121),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Handle bar
-          Container(
-            margin: const EdgeInsets.only(top: 12),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.white.withAlpha((0.3 * 255).round()),
-              borderRadius: BorderRadius.circular(2),
+    return _buildGlassSheet(
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildHandleBar(),
+            const SizedBox(height: 16),
+            // Settings options
+            _buildSettingsTile(
+              icon: Icons.high_quality_rounded,
+              title: 'Quality',
+              value: _formatQuality(widget.currentQuality),
+              onTap: () => _showQualityPicker(context),
             ),
-          ),
-          const SizedBox(height: 16),
-          // Settings options
-          _buildSettingsTile(
-            icon: Icons.high_quality_rounded,
-            title: 'Quality',
-            value: _formatQuality(widget.currentQuality),
-            onTap: () => _showQualityPicker(context),
-          ),
-          _buildSettingsTile(
-            icon: Icons.speed_rounded,
-            title: 'Playback speed',
-            value: widget.currentSpeed == 1.0
-                ? 'Normal'
-                : '${widget.currentSpeed}x',
-            onTap: () => _showSpeedPicker(context),
-          ),
-          _buildSettingsTile(
-            icon: widget.isLooping
-                ? Icons.repeat_one_rounded
-                : Icons.repeat_rounded,
-            title: 'Loop',
-            value: widget.isLooping ? 'On' : 'Off',
-            onTap: () {
-              widget.onLoopToggled(!widget.isLooping);
-              Navigator.pop(context);
-            },
-          ),
-          const SizedBox(height: 16),
-        ],
+            _buildSettingsTile(
+              icon: Icons.speed_rounded,
+              title: 'Playback speed',
+              value: widget.currentSpeed == 1.0
+                  ? 'Normal'
+                  : '${widget.currentSpeed}x',
+              onTap: () => _showSpeedPicker(context),
+            ),
+            _buildSettingsTile(
+              icon: widget.isLooping
+                  ? Icons.repeat_one_rounded
+                  : Icons.repeat_rounded,
+              title: 'Loop',
+              value: widget.isLooping ? 'On' : 'Off',
+              onTap: () {
+                widget.onLoopToggled(!widget.isLooping);
+                Navigator.pop(context);
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
       ),
     );
   }
@@ -99,35 +98,165 @@ class _SettingsBottomSheetState extends State<SettingsBottomSheet> {
     required String value,
     required VoidCallback onTap,
   }) {
-    return ListTile(
-      leading: Icon(icon, color: Colors.white, size: 24),
-      title: Text(
-        title,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 15,
-          fontWeight: FontWeight.w500,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: _buildGlassTile(
+        onTap: onTap,
+        child: Row(
+          children: [
+            _buildGlassIcon(icon),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ),
+            Text(
+              value,
+              style: TextStyle(
+                color: Colors.white.withAlpha((0.7 * 255).round()),
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: Colors.white.withAlpha((0.6 * 255).round()),
+              size: 20,
+            ),
+          ],
         ),
       ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
+    );
+  }
+
+  Widget _buildHandleBar() {
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      width: 48,
+      height: 5,
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha((0.3 * 255).round()),
+        borderRadius: BorderRadius.circular(12),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
         children: [
-          Text(
-            value,
-            style: TextStyle(
-              color: Colors.white.withAlpha((0.7 * 255).round()),
-              fontSize: 14,
+          Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              color: _accent,
+              shape: BoxShape.circle,
             ),
           ),
-          const SizedBox(width: 4),
-          Icon(
-            Icons.chevron_right_rounded,
-            color: Colors.white.withAlpha((0.5 * 255).round()),
-            size: 20,
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: TextStyle(
+              color: Colors.white.withAlpha((0.85 * 255).round()),
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildGlassIcon(IconData icon) {
+    return Container(
+      height: 36,
+      width: 36,
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha((0.08 * 255).round()),
+        shape: BoxShape.circle,
+        border: Border.all(color: _glassBorder, width: 1),
+      ),
+      child: Icon(icon, color: Colors.white, size: 20),
+    );
+  }
+
+  Widget _buildGlassTile({
+    required Widget child,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
       onTap: onTap,
+      child: _buildGlassPanel(
+        borderRadius: BorderRadius.circular(18),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        child: child,
+      ),
+    );
+  }
+
+  Widget _buildGlassSheet({required Widget child}) {
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0x33FFFFFF),
+                Color(0x1AFFFFFF),
+              ],
+            ),
+            border: Border.all(color: _glassBorder, width: 1),
+          ),
+          child: _buildGlassPanel(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+            padding: const EdgeInsets.only(bottom: 12),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGlassPanel({
+    required Widget child,
+    EdgeInsetsGeometry? padding,
+    BorderRadius? borderRadius,
+  }) {
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        borderRadius: borderRadius ?? BorderRadius.circular(18),
+        color: _glassBase,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_glassHighlight, Colors.transparent],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha((0.35 * 255).round()),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: child,
     );
   }
 
@@ -151,6 +280,7 @@ class _SettingsBottomSheetState extends State<SettingsBottomSheet> {
         videoId: widget.videoId,
         headers: widget.headers,
         onQualitySelected: widget.onQualitySelected,
+        onDownloadComplete: widget.onDownloadComplete,
       ),
     );
   }
@@ -160,66 +290,57 @@ class _SettingsBottomSheetState extends State<SettingsBottomSheet> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF212121),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        ),
+      builder: (context) => _buildGlassSheet(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              margin: const EdgeInsets.only(top: 12),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white.withAlpha((0.3 * 255).round()),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
+            _buildHandleBar(),
             const SizedBox(height: 8),
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                'Playback speed',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
+            _buildSectionTitle('Playback speed'),
+            const SizedBox(height: 12),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    ...List.generate(_speeds.length, (index) {
+                      final speed = _speeds[index];
+                      final isSelected = speed == widget.currentSpeed;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        child: _buildGlassTile(
+                          onTap: () {
+                            widget.onSpeedSelected(speed);
+                            Navigator.pop(context);
+                          },
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.check_rounded,
+                                color:
+                                    isSelected ? _accent : Colors.transparent,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                speed == 1.0 ? 'Normal' : '${speed}x',
+                                style: TextStyle(
+                                  color: isSelected ? _accent : Colors.white,
+                                  fontSize: 15,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
                 ),
               ),
             ),
-            Expanded(
-                child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  ...List.generate(_speeds.length, (index) {
-                    final speed = _speeds[index];
-                    final isSelected = speed == widget.currentSpeed;
-                    return ListTile(
-                      leading: Icon(
-                        Icons.check_rounded,
-                        color: isSelected ? Colors.red : Colors.transparent,
-                        size: 20,
-                      ),
-                      title: Text(
-                        speed == 1.0 ? 'Normal' : '${speed}x',
-                        style: TextStyle(
-                          color: isSelected ? Colors.red : Colors.white,
-                          fontSize: 15,
-                          fontWeight:
-                              isSelected ? FontWeight.w600 : FontWeight.w400,
-                        ),
-                      ),
-                      onTap: () {
-                        widget.onSpeedSelected(speed);
-                        Navigator.pop(context);
-                      },
-                    );
-                  }),
-                ],
-              ),
-            )),
             const SizedBox(height: 16),
           ],
         ),
@@ -235,6 +356,9 @@ class _QualityPickerSheet extends StatefulWidget {
   final String videoId;
   final Map<String, String>? headers;
   final void Function(M3U8Data quality) onQualitySelected;
+  final void Function(String quality, int? estimatedSize)? onDownloadStart;
+  final void Function(String quality, int actualSize, int durationMs)?
+      onDownloadComplete;
 
   const _QualityPickerSheet({
     required this.qualities,
@@ -242,6 +366,8 @@ class _QualityPickerSheet extends StatefulWidget {
     required this.videoId,
     this.headers,
     required this.onQualitySelected,
+    this.onDownloadStart,
+    this.onDownloadComplete,
   });
 
   @override
@@ -249,6 +375,10 @@ class _QualityPickerSheet extends StatefulWidget {
 }
 
 class _QualityPickerSheetState extends State<_QualityPickerSheet> {
+  static const Color _glassBase = Color(0x1AFFFFFF);
+  static const Color _glassHighlight = Color(0x33FFFFFF);
+  static const Color _glassBorder = Color(0x4DFFFFFF);
+  static const Color _accent = Color(0xFF67E8F9);
   final Map<String, bool> _downloadedStatus = {};
   final Map<String, HlsDownloadProgress?> _downloadProgress = {};
   StreamSubscription<HlsDownloadProgress>? _progressSubscription;
@@ -324,35 +454,14 @@ class _QualityPickerSheetState extends State<_QualityPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF212121),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
+    return _buildGlassSheet(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            margin: const EdgeInsets.only(top: 12),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.white.withAlpha((0.3 * 255).round()),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
+          _buildHandleBar(),
           const SizedBox(height: 8),
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text(
-              'Video quality',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
+          _buildSectionTitle('Video quality'),
+          const SizedBox(height: 12),
           Expanded(
             child: SingleChildScrollView(
               child: Column(
@@ -376,50 +485,79 @@ class _QualityPickerSheetState extends State<_QualityPickerSheet> {
     final progress = _downloadProgress[qualityName];
     final isDownloading = progress?.status == HlsDownloadStatus.downloading;
 
-    return ListTile(
-      leading: Icon(
-        Icons.check_rounded,
-        color: isSelected ? Colors.red : Colors.transparent,
-        size: 20,
-      ),
-      title: Row(
-        children: [
-          Text(
-            _formatQuality(qualityName),
-            style: TextStyle(
-              color: isSelected ? Colors.red : Colors.white,
-              fontSize: 15,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: _buildGlassTile(
+        onTap: () {
+          widget.onQualitySelected(quality);
+          Navigator.pop(context);
+        },
+        child: Row(
+          children: [
+            Icon(
+              Icons.check_rounded,
+              color: isSelected ? _accent : Colors.transparent,
+              size: 20,
             ),
-          ),
-          if (isDownloaded) ...[
             const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.green.withAlpha((0.2 * 255).round()),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: const Text(
-                'Downloaded',
-                style: TextStyle(
-                  color: Colors.green,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        _formatQuality(qualityName),
+                        style: TextStyle(
+                          color: isSelected ? _accent : Colors.white,
+                          fontSize: 15,
+                          fontWeight:
+                              isSelected ? FontWeight.w700 : FontWeight.w500,
+                        ),
+                      ),
+                      if (isDownloaded) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withAlpha((0.2 * 255).round()),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            'Downloaded',
+                            style: TextStyle(
+                              color: Colors.green,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  if (!isAuto &&
+                      quality.fileSize != null &&
+                      quality.fileSize != 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        quality.fileSizeFormatted,
+                        style: TextStyle(
+                          color: Colors.white.withAlpha((0.55 * 255).round()),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
+            if (!isAuto)
+              _buildDownloadButton(
+                  quality, isDownloaded, isDownloading, progress),
           ],
-        ],
+        ),
       ),
-      trailing: isAuto
-          ? null
-          : _buildDownloadButton(
-              quality, isDownloaded, isDownloading, progress),
-      onTap: () {
-        widget.onQualitySelected(quality);
-        Navigator.pop(context);
-      },
     );
   }
 
@@ -455,13 +593,10 @@ class _QualityPickerSheetState extends State<_QualityPickerSheet> {
           // Show resume UI for paused downloads
           return _buildPausedResumeButton(quality);
         }
-        return IconButton(
-          icon: const Icon(
-            Icons.download_rounded,
-            color: Colors.white,
-            size: 22,
-          ),
-          onPressed: () => _startDownload(quality),
+        return _buildIconCapsule(
+          icon: Icons.download_rounded,
+          color: Colors.white,
+          onTap: () => _startDownload(quality),
         );
       },
     );
@@ -501,38 +636,24 @@ class _QualityPickerSheetState extends State<_QualityPickerSheet> {
         ),
         const SizedBox(width: 4),
         // Retry button
-        IconButton(
-          icon: const Icon(
-            Icons.refresh_rounded,
-            color: Colors.orange,
-            size: 20,
-          ),
-          onPressed: () {
-            // Clear the failed state and retry
+        _buildIconCapsule(
+          icon: Icons.refresh_rounded,
+          color: Colors.orange,
+          onTap: () {
             setState(() {
               _downloadProgress.remove(quality.dataQuality);
             });
             _startDownload(quality);
           },
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-          tooltip: 'Retry download',
         ),
-        // Dismiss button
-        IconButton(
-          icon: const Icon(
-            Icons.close_rounded,
-            color: Colors.grey,
-            size: 18,
-          ),
-          onPressed: () {
+        _buildIconCapsule(
+          icon: Icons.close_rounded,
+          color: Colors.white.withAlpha((0.7 * 255).round()),
+          onTap: () {
             setState(() {
               _downloadProgress.remove(quality.dataQuality);
             });
           },
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-          tooltip: 'Dismiss',
         ),
       ],
     );
@@ -557,25 +678,15 @@ class _QualityPickerSheetState extends State<_QualityPickerSheet> {
             ),
           ),
         ),
-        IconButton(
-          icon: const Icon(
-            Icons.play_arrow_rounded,
-            color: Colors.green,
-            size: 22,
-          ),
-          onPressed: () => _resumeDownload(quality),
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+        _buildIconCapsule(
+          icon: Icons.play_arrow_rounded,
+          color: Colors.green,
+          onTap: () => _resumeDownload(quality),
         ),
-        IconButton(
-          icon: const Icon(
-            Icons.delete_outline_rounded,
-            color: Colors.red,
-            size: 20,
-          ),
-          onPressed: () => _cancelDownload(quality),
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+        _buildIconCapsule(
+          icon: Icons.delete_outline_rounded,
+          color: Colors.red,
+          onTap: () => _cancelDownload(quality),
         ),
       ],
     );
@@ -628,26 +739,16 @@ class _QualityPickerSheetState extends State<_QualityPickerSheet> {
             ),
           ),
           const SizedBox(width: 4),
-          IconButton(
-            icon: Icon(
-              isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
-              color: Colors.white,
-              size: 20,
-            ),
-            onPressed: () =>
+          _buildIconCapsule(
+            icon: isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+            color: Colors.white,
+            onTap: () =>
                 isPaused ? _resumeDownload(quality) : _pauseDownload(quality),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
           ),
-          IconButton(
-            icon: const Icon(
-              Icons.close_rounded,
-              color: Colors.red,
-              size: 20,
-            ),
-            onPressed: () => _cancelDownload(quality),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          _buildIconCapsule(
+            icon: Icons.close_rounded,
+            color: Colors.red,
+            onTap: () => _cancelDownload(quality),
           ),
         ],
       ),
@@ -655,15 +756,140 @@ class _QualityPickerSheetState extends State<_QualityPickerSheet> {
   }
 
   Widget _buildDeleteButton(M3U8Data quality) {
-    return IconButton(
-      icon: const Icon(
-        Icons.delete_outline_rounded,
-        color: Colors.red,
-        size: 22,
+    return _buildIconCapsule(
+      icon: Icons.delete_outline_rounded,
+      color: Colors.red,
+      onTap: () => _showDeleteConfirmation(quality),
+    );
+  }
+
+  Widget _buildIconCapsule({
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: Colors.white.withAlpha((0.08 * 255).round()),
+          shape: BoxShape.circle,
+          border: Border.all(color: _glassBorder, width: 1),
+        ),
+        child: Icon(icon, color: color, size: 18),
       ),
-      onPressed: () {
-        _showDeleteConfirmation(quality);
-      },
+    );
+  }
+
+  Widget _buildHandleBar() {
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      width: 48,
+      height: 5,
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha((0.3 * 255).round()),
+        borderRadius: BorderRadius.circular(12),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              color: _accent,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: TextStyle(
+              color: Colors.white.withAlpha((0.85 * 255).round()),
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGlassTile({
+    required Widget child,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: _buildGlassPanel(
+        borderRadius: BorderRadius.circular(18),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        child: child,
+      ),
+    );
+  }
+
+  Widget _buildGlassSheet({required Widget child}) {
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0x33FFFFFF),
+                Color(0x1AFFFFFF),
+              ],
+            ),
+            border: Border.all(color: _glassBorder, width: 1),
+          ),
+          child: _buildGlassPanel(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+            padding: const EdgeInsets.only(bottom: 12),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGlassPanel({
+    required Widget child,
+    EdgeInsetsGeometry? padding,
+    BorderRadius? borderRadius,
+  }) {
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        borderRadius: borderRadius ?? BorderRadius.circular(18),
+        color: _glassBase,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_glassHighlight, Colors.transparent],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha((0.35 * 255).round()),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: child,
     );
   }
 
@@ -685,6 +911,12 @@ class _QualityPickerSheetState extends State<_QualityPickerSheet> {
 
     // Initialize notification service for download progress
     await DownloadNotificationService.instance.initialize();
+
+    // Track download start time for duration calculation
+    final downloadStartTime = DateTime.now();
+
+    // Notify analytics about download start
+    widget.onDownloadStart?.call(quality.dataQuality!, quality.fileSize);
 
     // Start download and update UI immediately
     setState(() {
@@ -719,6 +951,16 @@ class _QualityPickerSheetState extends State<_QualityPickerSheet> {
           setState(() {
             _downloadedStatus[quality.dataQuality!] = true;
           });
+
+          // Calculate download duration and notify analytics
+          final durationMs =
+              DateTime.now().difference(downloadStartTime).inMilliseconds;
+          final actualSize =
+              _downloadProgress[quality.dataQuality!]?.downloadedBytes ??
+                  quality.fileSize ??
+                  0;
+          widget.onDownloadComplete
+              ?.call(quality.dataQuality!, actualSize, durationMs);
         }
       },
       onError: (error) {

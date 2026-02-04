@@ -19,6 +19,8 @@ class VideoLoadingAnimation extends StatefulWidget {
 
 class _VideoLoadingAnimationState extends State<VideoLoadingAnimation>
     with TickerProviderStateMixin {
+  static const Color _accent = Color(0xFF67E8F9);
+  static const Color _accentSoft = Color(0x8067E8F9);
   late AnimationController _pulseController;
   late AnimationController _rotationController;
   late Animation<double> _pulseAnimation;
@@ -56,12 +58,20 @@ class _VideoLoadingAnimationState extends State<VideoLoadingAnimation>
 
   @override
   Widget build(BuildContext context) {
-    final primaryColor = widget.primaryColor ?? Colors.red;
-    final secondaryColor =
-        widget.secondaryColor ?? Colors.red.withAlpha((0.3 * 255).round());
+    final primaryColor = widget.primaryColor ?? _accent;
+    final secondaryColor = widget.secondaryColor ?? _accentSoft;
 
     return Container(
-      color: Colors.black,
+      decoration: BoxDecoration(
+        color: Colors.black,
+        gradient: RadialGradient(
+          colors: [
+            Colors.black.withAlpha((0.6 * 255).round()),
+            Colors.black,
+          ],
+          radius: 1.2,
+        ),
+      ),
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -106,7 +116,12 @@ class _VideoLoadingAnimationState extends State<VideoLoadingAnimation>
                           height: 40,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: primaryColor.withAlpha((0.1 * 255).round()),
+                            color: primaryColor.withAlpha((0.12 * 255).round()),
+                            border: Border.all(
+                              color:
+                                  primaryColor.withAlpha((0.35 * 255).round()),
+                              width: 1,
+                            ),
                           ),
                           child: Icon(
                             Icons.play_arrow_rounded,
@@ -132,7 +147,7 @@ class _VideoLoadingAnimationState extends State<VideoLoadingAnimation>
                     style: TextStyle(
                       color: Colors.white.withAlpha((0.8 * 255).round()),
                       fontSize: 14,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w600,
                       letterSpacing: 0.5,
                     ),
                   ),
@@ -184,7 +199,7 @@ class BufferingIndicator extends StatelessWidget {
           width: 48,
           height: 48,
           child: CircularProgressIndicator(
-            color: Colors.white,
+            color: Color(0xFF67E8F9),
             strokeWidth: 3,
           ),
         ),

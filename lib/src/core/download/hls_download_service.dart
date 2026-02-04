@@ -458,6 +458,13 @@ class HlsDownloadTask {
         throw Exception('No playlist URL provided');
       }
 
+      // Add purpose=download to the URL for analytics tracking on the server
+      final uri = Uri.parse(playlistUrl);
+      final queryParams = Map<String, String>.from(uri.queryParameters);
+      queryParams['purpose'] = 'download';
+      queryParams['source'] = 'app';
+      playlistUrl = uri.replace(queryParameters: queryParams).toString();
+
       _client = http.Client();
 
       // Step 1: Fetch and parse the playlist with EXTINF durations

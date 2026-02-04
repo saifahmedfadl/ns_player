@@ -144,6 +144,72 @@ class AnalyticsEvent {
   }
 }
 
+/// Server-provided analytics configuration
+class ServerAnalyticsConfig {
+  final bool analyticsEnabled;
+  final String level; // 'full', 'sampling', 'high_load', 'critical'
+  final double samplingRate;
+  final int progressIntervalMs;
+
+  ServerAnalyticsConfig({
+    this.analyticsEnabled = true,
+    this.level = 'full',
+    this.samplingRate = 1.0,
+    this.progressIntervalMs = 10000,
+  });
+
+  factory ServerAnalyticsConfig.fromJson(Map<String, dynamic> json) {
+    return ServerAnalyticsConfig(
+      analyticsEnabled: json['analyticsEnabled'] ?? true,
+      level: json['level'] ?? 'full',
+      samplingRate: (json['samplingRate'] ?? 1.0).toDouble(),
+      progressIntervalMs: json['progressIntervalMs'] ?? 10000,
+    );
+  }
+
+  /// Check if an event should be processed based on level and sampling
+  bool shouldProcessEvent(AnalyticsEventType eventType) {
+    if (!analyticsEnabled) return false;
+
+    switch (level) {
+      case 'critical':
+        // Only essential events
+        return false;
+      case 'high_load':
+        // Drop buffer, quality_change, seek, view_progress
+        if ([
+          AnalyticsEventType.bufferStart,
+          AnalyticsEventType.bufferEnd,
+          AnalyticsEventType.qualityChange,
+          AnalyticsEventType.seek,
+          AnalyticsEventType.viewProgress
+        ].contains(eventType)) {
+          return false;
+        }
+        return true;
+      case 'sampling':
+        // Quality change always processed
+        if (eventType == AnalyticsEventType.qualityChange) return true;
+        // Sample view_progress and buffer events
+        if ([
+          AnalyticsEventType.viewProgress,
+          AnalyticsEventType.bufferStart,
+          AnalyticsEventType.bufferEnd
+        ].contains(eventType)) {
+          return _shouldSample();
+        }
+        return true;
+      case 'full':
+      default:
+        return true;
+    }
+  }
+
+  bool _shouldSample() {
+    return (DateTime.now().millisecondsSinceEpoch % 100) < (samplingRate * 100);
+  }
+}
+
 /// Analytics Service Singleton
 class AnalyticsService {
   static final AnalyticsService _instance = AnalyticsService._internal();
@@ -157,15 +223,26 @@ class AnalyticsService {
   static const String _qualityPrefKey = 'preferred_quality';
   static const String _resumePointPrefix = 'resume_point_';
   static const String _pendingEventsKey = 'pending_analytics_events';
+  static const String _fingerprintKey =
+      'device_fingerprint'; // [C] Fingerprint storage key
 
   // State
   String? _baseUrl;
   String? _authToken;
   String? _userId;
   String? _sessionId;
+  String? _fingerprint; // [C] Device fingerprint for anonymous tracking
   PlayerSource _source = PlayerSource.app;
   PlaybackPurpose _purpose = PlaybackPurpose.stream;
   bool _isEnabled = true;
+
+  // Server configuration
+  static ServerAnalyticsConfig? _cachedServerConfig;
+  ServerAnalyticsConfig get _serverConfig =>
+      _cachedServerConfig ?? ServerAnalyticsConfig();
+
+  // Bandwidth tracking
+  int _totalBandwidthBytes = 0;
 
   final List<AnalyticsEvent> _eventBuffer = [];
   Timer? _batchTimer;
@@ -200,15 +277,85 @@ class AnalyticsService {
     // Don't track analytics for admin preview
     _isEnabled = source != PlayerSource.admin;
 
+    // [C] Load or generate device fingerprint
+    await _loadOrGenerateFingerprint();
+
     // Load any pending events from storage
     await _loadPendingEvents();
 
     // Start batch timer
     _startBatchTimer();
 
+    // Fetch server configuration
+    await _fetchServerConfig();
+
     if (kDebugMode) {
       debugPrint(
-          '[AnalyticsService] Initialized: source=$source, enabled=$_isEnabled');
+          '[AnalyticsService] Initialized: source=$source, enabled=$_isEnabled, fingerprint=$_fingerprint');
+    }
+  }
+
+  /// [C] Load or generate device fingerprint for anonymous tracking
+  Future<void> _loadOrGenerateFingerprint() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _fingerprint = prefs.getString(_fingerprintKey);
+
+      if (_fingerprint == null) {
+        // Generate a new fingerprint based on session ID and timestamp
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        final random = timestamp.toString().hashCode.abs().toRadixString(36);
+        _fingerprint = 'fp_${timestamp.toRadixString(36)}_$random';
+
+        // Persist for future sessions
+        await prefs.setString(_fingerprintKey, _fingerprint!);
+
+        if (kDebugMode) {
+          debugPrint(
+              '[AnalyticsService] Generated new fingerprint: $_fingerprint');
+        }
+      }
+    } catch (e) {
+      // Fallback to session-based fingerprint
+      _fingerprint =
+          'session_${_sessionId ?? DateTime.now().millisecondsSinceEpoch}';
+      if (kDebugMode) {
+        debugPrint('[AnalyticsService] Fingerprint fallback: $e');
+      }
+    }
+  }
+
+  /// Fetch analytics configuration from server
+  Future<void> _fetchServerConfig() async {
+    if (_baseUrl == null || _cachedServerConfig != null) return;
+
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/api/v1/admin/analytics/client-config'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (_authToken != null) 'Authorization': 'Bearer $_authToken',
+        },
+      ).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        if (json['success'] == true && json['data'] != null) {
+          _cachedServerConfig = ServerAnalyticsConfig.fromJson(json['data']);
+          _isEnabled =
+              _serverConfig.analyticsEnabled && _source != PlayerSource.admin;
+
+          if (kDebugMode) {
+            debugPrint(
+                '[AnalyticsService] Server config loaded: level=${_serverConfig.level}, sampling=${_serverConfig.samplingRate}');
+          }
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[AnalyticsService] Failed to fetch server config: $e');
+      }
+      // Continue with defaults
     }
   }
 
@@ -239,12 +386,22 @@ class AnalyticsService {
     _currentVideoId = videoId;
     _currentPosition = 0;
     _totalWatched = 0;
+    _totalBandwidthBytes = 0; // Reset bandwidth tracking
     _sessionId = _generateSessionId();
 
     // Track session start
     trackEvent(AnalyticsEvent(
       eventType: AnalyticsEventType.sessionStart,
       videoId: videoId,
+    ));
+
+    // Track view start
+    trackEvent(AnalyticsEvent(
+      eventType: AnalyticsEventType.viewStart,
+      videoId: videoId,
+      data: {
+        'position': 0,
+      },
     ));
 
     // Start resume point timer
@@ -255,7 +412,7 @@ class AnalyticsService {
   void stopVideoTracking({double? finalPosition, double? completionPct}) {
     if (!_isEnabled || _currentVideoId == null) return;
 
-    // Track session end
+    // Track session end with bandwidth
     trackEvent(AnalyticsEvent(
       eventType: AnalyticsEventType.sessionEnd,
       videoId: _currentVideoId!,
@@ -263,6 +420,7 @@ class AnalyticsService {
         'position': finalPosition ?? _currentPosition,
         'totalWatched': _totalWatched,
         'completionPct': completionPct,
+        'bandwidthBytes': _totalBandwidthBytes,
       },
     ));
 
@@ -285,6 +443,11 @@ class AnalyticsService {
   void trackEvent(AnalyticsEvent event) {
     if (!_isEnabled) return;
 
+    // Check server config for event filtering
+    if (!_serverConfig.shouldProcessEvent(event.eventType)) {
+      return;
+    }
+
     _eventBuffer.add(event);
 
     // Flush if buffer is full
@@ -293,7 +456,6 @@ class AnalyticsService {
     }
   }
 
-  /// Track video playback progress (called frequently)
   void trackProgress({
     required String videoId,
     required double position,
@@ -301,6 +463,7 @@ class AnalyticsService {
     String? quality,
     double? bandwidth,
     double? playbackSpeed, // Added playback speed
+    int? bytesDownloaded, // For bandwidth tracking
   }) {
     if (!_isEnabled) return;
 
@@ -308,6 +471,11 @@ class AnalyticsService {
 
     // Calculate total watched (simple approximation)
     _totalWatched = position; // Could be more sophisticated
+
+    // Track bandwidth
+    if (bytesDownloaded != null && bytesDownloaded > 0) {
+      _totalBandwidthBytes += bytesDownloaded;
+    }
 
     trackEvent(AnalyticsEvent(
       eventType: AnalyticsEventType.viewProgress,
@@ -473,24 +641,53 @@ class AnalyticsService {
     ));
   }
 
-  /// Track download complete
-  void trackDownloadComplete({
+  /// Track download complete - sends directly to dedicated endpoint
+  /// This ensures downloads are only counted when fully completed
+  Future<void> trackDownloadComplete({
     required String videoId,
     required String quality,
     required int actualSize,
     required int durationMs,
-  }) {
-    if (!_isEnabled) return;
+  }) async {
+    debugPrint(
+        '[AnalyticsService] trackDownloadComplete called: videoId=$videoId, quality=$quality, enabled=$_isEnabled, baseUrl=$_baseUrl');
+    if (!_isEnabled || _baseUrl == null) {
+      debugPrint(
+          '[AnalyticsService] Download tracking skipped: enabled=$_isEnabled, baseUrl=$_baseUrl');
+      return;
+    }
 
-    trackEvent(AnalyticsEvent(
-      eventType: AnalyticsEventType.downloadComplete,
-      videoId: videoId,
-      data: {
-        'quality': quality,
-        'downloadSize': actualSize,
-        'downloadDuration': durationMs,
-      },
-    ));
+    try {
+      final url =
+          Uri.parse('$_baseUrl/api/v1/videos/$videoId/download-complete');
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+      };
+      if (_authToken != null) {
+        headers['Authorization'] = 'Bearer $_authToken';
+      }
+
+      final response = await http.post(
+        url,
+        headers: headers,
+        body: jsonEncode({
+          'quality': quality,
+          'fileSize': actualSize,
+          'durationMs': durationMs,
+        }),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        debugPrint(
+            '[AnalyticsService] Download complete tracked: $videoId, quality: $quality');
+      } else {
+        debugPrint(
+            '[AnalyticsService] Failed to track download complete: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('[AnalyticsService] Error tracking download complete: $e');
+      // Don't throw - downloads should work even if tracking fails
+    }
   }
 
   /// Track error
@@ -650,9 +847,15 @@ class AnalyticsService {
   Future<void> _sendEvents(List<AnalyticsEvent> events) async {
     if (events.isEmpty || _baseUrl == null) return;
 
+    // [C] Generate idempotency key for this batch
+    final idempotencyKey =
+        'batch_${DateTime.now().millisecondsSinceEpoch}_${events.length}';
+
     final payload = {
       'sessionId': _sessionId,
       'userId': _userId,
+      'fingerprint': _fingerprint, // [C] Device fingerprint
+      'idempotencyKey': idempotencyKey, // [C] Unique batch ID for deduplication
       'source': _source.name,
       'purpose': _purpose.name,
       'events': events.map((e) => e.toJson()).toList(),
@@ -676,7 +879,8 @@ class AnalyticsService {
       throw Exception('Server returned ${response.statusCode}');
     }
 
-    debugPrint('[AnalyticsService] Sent ${events.length} events');
+    debugPrint(
+        '[AnalyticsService] Sent ${events.length} events with idempotencyKey: $idempotencyKey');
   }
 
   Future<void> _savePendingEvents(List<AnalyticsEvent> events) async {
@@ -684,24 +888,143 @@ class AnalyticsService {
       final prefs = await SharedPreferences.getInstance();
       final existing = prefs.getStringList(_pendingEventsKey) ?? [];
       final newEvents = events.map((e) => jsonEncode(e.toJson())).toList();
-      await prefs.setStringList(_pendingEventsKey, [...existing, ...newEvents]);
+
+      // Limit pending queue size to prevent memory issues (max 500 events)
+      final combined = [...existing, ...newEvents];
+      final limited = combined.length > 500
+          ? combined.sublist(combined.length - 500)
+          : combined;
+
+      await prefs.setStringList(_pendingEventsKey, limited);
+      debugPrint(
+          '[AnalyticsService] Saved ${events.length} events to offline queue (total: ${limited.length})');
     } catch (e) {
       debugPrint('[AnalyticsService] Failed to save pending events: $e');
     }
   }
 
+  /// [C] Load and resend pending events from offline queue
   Future<void> _loadPendingEvents() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final pending = prefs.getStringList(_pendingEventsKey);
-      if (pending != null && pending.isNotEmpty) {
-        // Try to send pending events
-        debugPrint('[AnalyticsService] Found ${pending.length} pending events');
-        // Clear pending after loading
+
+      if (pending == null || pending.isEmpty) {
+        return;
+      }
+
+      debugPrint(
+          '[AnalyticsService] Found ${pending.length} pending events in offline queue');
+
+      // Parse events back into AnalyticsEvent objects
+      final List<AnalyticsEvent> eventsToSend = [];
+      for (final jsonStr in pending) {
+        try {
+          final json = jsonDecode(jsonStr) as Map<String, dynamic>;
+          final event = _parseEventFromJson(json);
+          if (event != null) {
+            eventsToSend.add(event);
+          }
+        } catch (e) {
+          debugPrint('[AnalyticsService] Failed to parse pending event: $e');
+        }
+      }
+
+      if (eventsToSend.isEmpty) {
         await prefs.remove(_pendingEventsKey);
+        return;
+      }
+
+      // Try to send pending events (in batches of 50)
+      bool allSent = true;
+      for (int i = 0; i < eventsToSend.length; i += 50) {
+        final batch = eventsToSend.sublist(
+            i, i + 50 > eventsToSend.length ? eventsToSend.length : i + 50);
+
+        try {
+          await _sendEvents(batch);
+          debugPrint('[AnalyticsService] Sent ${batch.length} pending events');
+        } catch (e) {
+          debugPrint('[AnalyticsService] Failed to send pending batch: $e');
+          allSent = false;
+          // Save remaining events back to queue
+          final remaining = eventsToSend.sublist(i);
+          await _savePendingEvents(remaining);
+          break;
+        }
+      }
+
+      if (allSent) {
+        await prefs.remove(_pendingEventsKey);
+        debugPrint(
+            '[AnalyticsService] Cleared offline queue - all events sent');
       }
     } catch (e) {
       debugPrint('[AnalyticsService] Failed to load pending events: $e');
+    }
+  }
+
+  /// Parse an AnalyticsEvent from JSON (for offline queue restoration)
+  AnalyticsEvent? _parseEventFromJson(Map<String, dynamic> json) {
+    try {
+      final eventTypeStr = json['eventType'] as String?;
+      final videoId = json['videoId'] as String?;
+
+      if (eventTypeStr == null || videoId == null) return null;
+
+      final eventType = _stringToEventType(eventTypeStr);
+      if (eventType == null) return null;
+
+      return AnalyticsEvent(
+        eventType: eventType,
+        videoId: videoId,
+        timestamp: json['timestamp'] != null
+            ? DateTime.tryParse(json['timestamp'] as String)
+            : null,
+        data: json['data'] as Map<String, dynamic>?,
+      );
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Convert string back to AnalyticsEventType
+  AnalyticsEventType? _stringToEventType(String type) {
+    switch (type) {
+      case 'session_start':
+        return AnalyticsEventType.sessionStart;
+      case 'session_end':
+        return AnalyticsEventType.sessionEnd;
+      case 'video_open':
+        return AnalyticsEventType.videoOpen;
+      case 'view_start':
+        return AnalyticsEventType.viewStart;
+      case 'view_progress':
+        return AnalyticsEventType.viewProgress;
+      case 'view_complete':
+        return AnalyticsEventType.viewComplete;
+      case 'buffer_start':
+        return AnalyticsEventType.bufferStart;
+      case 'buffer_end':
+        return AnalyticsEventType.bufferEnd;
+      case 'quality_change':
+        return AnalyticsEventType.qualityChange;
+      case 'seek':
+        return AnalyticsEventType.seek;
+      case 'pause':
+        return AnalyticsEventType.pause;
+      case 'resume':
+        return AnalyticsEventType.resume;
+      case 'download_start':
+        return AnalyticsEventType.downloadStart;
+      case 'download_complete':
+        return AnalyticsEventType.downloadComplete;
+      case 'download_cancel':
+        return AnalyticsEventType.downloadCancel;
+      case 'error':
+        return AnalyticsEventType.error;
+      default:
+        return null;
     }
   }
 

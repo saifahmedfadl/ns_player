@@ -95,6 +95,13 @@ class NsPlayer extends StatefulWidget {
   /// Called periodically with duration and position
   final void Function(Duration duration, Duration position)? addListener;
 
+  /// Callback when video playback fails completely after all retries
+  /// This is called when:
+  /// 1. Local playback fails
+  /// 2. Server retries are exhausted (3 attempts)
+  /// The parent widget can use this to switch to a fallback player (e.g., YouTube)
+  final void Function(String error, String videoUrl)? onPlaybackFailed;
+
   const NsPlayer({
     super.key,
     required this.url,
@@ -112,13 +119,14 @@ class NsPlayer extends StatefulWidget {
     this.primaryColor,
     this.analyticsConfig,
     this.addListener,
+    this.onPlaybackFailed,
   });
 
   @override
   State<NsPlayer> createState() => _NsPlayerState();
 }
 
-class _NsPlayerState extends State<NsPlayer> {
+class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
   VideoPlayerController? _controller;
   bool _isInitialized = false;
   bool _hasError = false;
@@ -133,10 +141,12 @@ class _NsPlayerState extends State<NsPlayer> {
   // Rate limiting protection to prevent HTTP 429 errors
   int _retryCount = 0;
   static const int _maxAutoRetries =
-      2; // Max automatic retries before requiring manual retry
+      3; // Max automatic retries before triggering fallback (3 server attempts)
   DateTime? _lastErrorTime;
   static const Duration _minRetryInterval =
       Duration(seconds: 3); // Minimum time between retries
+  bool _hasFallbackBeenTriggered =
+      false; // Ensure fallback is only triggered once
 
   List<M3U8Data> _qualities = [];
   final LocalHlsPlaybackManager _hlsPlaybackManager =
@@ -149,13 +159,17 @@ class _NsPlayerState extends State<NsPlayer> {
   bool _isBuffering = false;
   DateTime? _bufferStartTime;
   DateTime? _lastListenerUpdateTime;
+  bool _analyticsPaused = false;
 
   /// Unique identifier for the video (used for download management)
   /// If not provided, a hash of the URL will be used
   // String? videoId;
 
+  String? _cachedVideoId;
   String get _videoId {
-    return _extractVideoIdFromUrl(widget.url) ?? 'Unknown';
+    if (_cachedVideoId != null) return _cachedVideoId!;
+    _cachedVideoId = _extractVideoIdFromUrl(widget.url) ?? 'Unknown';
+    return _cachedVideoId!;
   }
 
   /// Extract MongoDB ObjectId from video URL
@@ -174,17 +188,10 @@ class _NsPlayerState extends State<NsPlayer> {
         if (videoId.length == 24 &&
             RegExp(r'^[a-f0-9]{24}$').hasMatch(videoId) &&
             RegExp(r'[a-f]').hasMatch(videoId)) {
-          if (kDebugMode) {
-            debugPrint(
-                '[Analytics] Extracted videoId: $videoId from URL: $url');
-          }
           return videoId;
         }
       }
 
-      if (kDebugMode) {
-        debugPrint('[Analytics] Failed to extract videoId from URL: $url');
-      }
       return null;
     } catch (e) {
       if (kDebugMode) {
@@ -197,6 +204,7 @@ class _NsPlayerState extends State<NsPlayer> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (kDebugMode) {
       print('Initial NsPlayer qualities data:');
       if (widget.qualities != null) {
@@ -245,11 +253,13 @@ class _NsPlayerState extends State<NsPlayer> {
   }
 
   Future<void> _handleVideoChange() async {
+    _stopAnalyticsTracking();
     _disposeController();
     await _hlsPlaybackManager.stopPlayback();
 
     if (mounted) {
       setState(() {
+        _cachedVideoId = null; // Clear cached videoId
         _currentQuality = 'Auto';
         _lastPosition = null;
         _isInitialized = false;
@@ -270,10 +280,28 @@ class _NsPlayerState extends State<NsPlayer> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _stopAnalyticsTracking();
     _disposeController();
     _hlsPlaybackManager.stopPlayback();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      if (!_analyticsPaused) {
+        _analyticsPaused = true;
+        _stopAnalyticsTracking();
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      if (_analyticsPaused) {
+        _analyticsPaused = false;
+        _startAnalyticsTracking();
+      }
+    }
   }
 
   void _stopAnalyticsTracking() {
@@ -293,6 +321,7 @@ class _NsPlayerState extends State<NsPlayer> {
 
   void _startAnalyticsTracking() {
     if (widget.analyticsConfig == null) return;
+    if (_controller == null || !_controller!.value.isInitialized) return;
 
     // Start tracking this video
     _analyticsService.startVideoTracking(_videoId);
@@ -560,12 +589,24 @@ class _NsPlayerState extends State<NsPlayer> {
           return;
         }
 
+        // Determine which URL to play (master manifest or specific quality)
+        String playUrl = widget.url;
+        if (_currentQuality != 'Auto' && _qualities.isNotEmpty) {
+          final selected = _qualities.firstWhere(
+            (q) => q.dataQuality == _currentQuality,
+            orElse: () => _qualities.first,
+          );
+          if (selected.dataQuality != 'Auto' && selected.dataURL != null) {
+            playUrl = selected.dataURL!;
+          }
+        }
+
         if (kDebugMode) {
           print(
-              'NsPlayer [Init #$currentInitId]: Initializing from network: ${widget.url}');
+              'NsPlayer [Init #$currentInitId]: Initializing from network ($_currentQuality): $playUrl');
         }
         _controller = VideoPlayerController.networkUrl(
-          Uri.parse(widget.url),
+          Uri.parse(playUrl),
           httpHeaders: widget.headers ?? const {},
           formatHint: _getVideoFormat(videoType),
           closedCaptionFile: widget.closedCaptionFile,
@@ -625,26 +666,32 @@ class _NsPlayerState extends State<NsPlayer> {
       // Otherwise, fall back to parsing the manifest (legacy approach)
       if (widget.qualities != null && widget.qualities!.isNotEmpty) {
         // Backend-driven: Use pre-parsed qualities from API
-        setState(() {
-          _qualities = [
-            M3U8Data(dataQuality: 'Auto', dataURL: widget.url),
-            ...widget.qualities!,
-          ];
+        if (_qualities.isEmpty) {
+          setState(() {
+            _qualities = [
+              M3U8Data(dataQuality: 'Auto', dataURL: widget.url),
+              ...widget.qualities!,
+            ];
+          });
+        }
+
+        // Apply preferred quality if saved (only on first init)
+        if (_currentQuality == 'Auto' && !isManualRetry) {
+          _applyPreferredQuality();
+        }
+      } else if (videoType == 'HLS' && _qualities.length <= 1) {
+        // Fetch qualities in background to avoid blocking player initialization
+        _fetchQualitySizesFromApi().then((_) {
+          if (mounted && (_qualities.isEmpty || _qualities.length == 1)) {
+            _fetchQualities(widget.url).then((_) {
+              if (mounted && !isManualRetry && _currentQuality == 'Auto') {
+                _applyPreferredQuality();
+              }
+            });
+          } else if (mounted && !isManualRetry && _currentQuality == 'Auto') {
+            _applyPreferredQuality();
+          }
         });
-        if (kDebugMode) {
-          print('Using ${widget.qualities!.length} qualities from API');
-        }
-
-        // Apply preferred quality if saved
-        _applyPreferredQuality();
-      } else if (videoType == 'HLS') {
-        // Try to fetch quality sizes from backend API first
-        await _fetchQualitySizesFromApi();
-
-        // If no quality sizes from API, fall back to parsing manifest
-        if (_qualities.isEmpty || _qualities.length == 1) {
-          _fetchQualities(widget.url);
-        }
       }
     } catch (e) {
       if (kDebugMode) {
@@ -660,16 +707,48 @@ class _NsPlayerState extends State<NsPlayer> {
           e.toString().contains('rate') ||
           e.toString().contains('-16845');
 
+      // Check if we should trigger fallback (after 3 server retry attempts)
+      if (_retryCount >= _maxAutoRetries && !_hasFallbackBeenTriggered) {
+        _hasFallbackBeenTriggered = true;
+        final errorMessage = e.toString();
+
+        if (kDebugMode) {
+          print('NsPlayer: Fallback triggered after $_retryCount retries');
+          print('NsPlayer: Error: $errorMessage');
+        }
+
+        // Trigger the fallback callback
+        if (widget.onPlaybackFailed != null) {
+          widget.onPlaybackFailed!(errorMessage, widget.url);
+          // Don't show error widget if fallback is being used
+          return;
+        }
+      }
+
       if (isRateLimitError) {
         if (kDebugMode) {
           print('NsPlayer: Rate limit detected. Retry count: $_retryCount');
         }
 
         // Auto-retry with exponential backoff for rate limit errors (max 3 retries)
-        if (_retryCount <= 3) {
+        if (_retryCount <= _maxAutoRetries) {
           final waitSeconds = 3 * _retryCount; // 3s, 6s, 9s
           if (kDebugMode) {
             print('NsPlayer: Waiting ${waitSeconds}s before retry...');
+          }
+          await Future.delayed(Duration(seconds: waitSeconds));
+          if (mounted) {
+            _initializePlayer();
+          }
+          return;
+        }
+      } else {
+        // For non-rate-limit errors, also retry up to max
+        if (_retryCount < _maxAutoRetries) {
+          final waitSeconds = 2 * _retryCount; // 2s, 4s for faster recovery
+          if (kDebugMode) {
+            print(
+                'NsPlayer: General error - retrying in ${waitSeconds}s... (attempt $_retryCount/$_maxAutoRetries)');
           }
           await Future.delayed(Duration(seconds: waitSeconds));
           if (mounted) {
@@ -806,10 +885,11 @@ class _NsPlayerState extends State<NsPlayer> {
       }
     }
 
-    // Track video complete
-    if (value.position >= value.duration &&
-        value.duration.inSeconds > 0 &&
-        !value.isPlaying) {
+    // Track video complete at 95% (not 100% to handle edge cases)
+    final completionRatio = value.duration.inSeconds > 0
+        ? value.position.inSeconds / value.duration.inSeconds
+        : 0.0;
+    if (completionRatio >= 0.95 && !value.isPlaying) {
       _analyticsService.trackComplete(
         videoId: _videoId,
         duration: value.duration.inSeconds.toDouble(),
@@ -1138,6 +1218,15 @@ class _NsPlayerState extends State<NsPlayer> {
         onQualitySelected: _onQualitySelected,
         onSpeedSelected: _onSpeedSelected,
         onLoopToggled: _onLoopToggled,
+        onDownloadComplete: (quality, actualSize, durationMs) {
+          // Track download completion via analytics service
+          _analyticsService.trackDownloadComplete(
+            videoId: _videoId,
+            quality: quality,
+            actualSize: actualSize,
+            durationMs: durationMs,
+          );
+        },
       ),
     );
   }
@@ -1278,11 +1367,14 @@ class _NsPlayerState extends State<NsPlayer> {
 
   @override
   Widget build(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: widget.aspectRatio,
-      child: Container(
-        color: Colors.black,
-        child: _buildContent(),
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: AspectRatio(
+        aspectRatio: widget.aspectRatio,
+        child: Container(
+          color: Colors.black,
+          child: _buildContent(),
+        ),
       ),
     );
   }
@@ -1351,7 +1443,7 @@ class _NsPlayerState extends State<NsPlayer> {
                   value: duration > 0 ? position / duration : 0,
                   backgroundColor: Colors.white.withAlpha((0.3 * 255).round()),
                   valueColor: AlwaysStoppedAnimation<Color>(
-                    widget.primaryColor ?? Colors.red,
+                    widget.primaryColor ?? const Color(0xFF67E8F9),
                   ),
                   minHeight: 2,
                 );
