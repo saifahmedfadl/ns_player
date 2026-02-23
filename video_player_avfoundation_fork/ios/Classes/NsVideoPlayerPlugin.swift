@@ -290,6 +290,11 @@ class NsVideoPlayer: NSObject, FlutterTexture {
         
         if keyPath == "status" {
             if item.status == .readyToPlay && !isInitialized {
+                // Apple's AVPlayer often ignores preferredForwardBufferDuration if set before readyToPlay for HLS
+                // Re-applying it here ensures the HLS stream respects the buffer limit
+                if #available(iOS 10.0, *) {
+                    item.preferredForwardBufferDuration = BufferConfig.preferredForwardBufferDuration
+                }
                 isInitialized = true
                 sendInitialized()
             } else if item.status == .failed {
