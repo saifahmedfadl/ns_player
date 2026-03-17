@@ -143,8 +143,9 @@ class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
   static const int _maxAutoRetries =
       3; // Max automatic retries before triggering fallback (3 server attempts)
   DateTime? _lastErrorTime;
-  static const Duration _minRetryInterval =
-      Duration(seconds: 3); // Minimum time between retries
+  static const Duration _minRetryInterval = Duration(
+    seconds: 3,
+  ); // Minimum time between retries
   bool _hasFallbackBeenTriggered =
       false; // Ensure fallback is only triggered once
 
@@ -366,7 +367,9 @@ class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
         .toList();
 
     final bestQuality = _analyticsService.getBestAvailableQuality(
-        preferred, availableQualities);
+      preferred,
+      availableQualities,
+    );
 
     if (bestQuality != null && bestQuality != _currentQuality) {
       final quality = _qualities.firstWhere(
@@ -398,11 +401,14 @@ class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
       if (_retryCount >= _maxAutoRetries) {
         if (kDebugMode) {
           print(
-              'NsPlayer [Init #$currentInitId]: Max auto-retries reached ($_maxAutoRetries). Waiting for manual retry.');
+            'NsPlayer [Init #$currentInitId]: Max auto-retries reached ($_maxAutoRetries). Waiting for manual retry.',
+          );
         }
-        setState(() {
-          _hasError = true;
-        });
+        if (mounted) {
+          setState(() {
+            _hasError = true;
+          });
+        }
         return;
       }
 
@@ -413,9 +419,11 @@ class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
           final waitTime = _minRetryInterval - timeSinceLastError;
           if (kDebugMode) {
             print(
-                'NsPlayer [Init #$currentInitId]: Rate limiting - waiting ${waitTime.inMilliseconds}ms before retry');
+              'NsPlayer [Init #$currentInitId]: Rate limiting - waiting ${waitTime.inMilliseconds}ms before retry',
+            );
           }
           await Future.delayed(waitTime);
+          if (!mounted) return;
         }
       }
     } else {
@@ -423,6 +431,7 @@ class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
       _retryCount = 0;
     }
 
+    if (!mounted) return;
     setState(() {
       _isInitialized = false;
       _hasError = false;
@@ -435,11 +444,13 @@ class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
 
       if (kDebugMode) {
         print(
-            'NsPlayer [Init #$currentInitId]: Starting... (retry: $_retryCount)');
+          'NsPlayer [Init #$currentInitId]: Starting... (retry: $_retryCount)',
+        );
         print('NsPlayer [Init #$currentInitId]: Video ID: $_videoId');
         print('NsPlayer [Init #$currentInitId]: URL: ${widget.url}');
         print(
-            'NsPlayer [Init #$currentInitId]: Buffer config: ${NsBufferControl.currentConfig}');
+          'NsPlayer [Init #$currentInitId]: Buffer config: ${NsBufferControl.currentConfig}',
+        );
       }
       // Determine video type and check for downloaded version
       final videoType = _getVideoType(widget.url);
@@ -473,12 +484,14 @@ class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
             _currentQuality = downloadedQuality; // Switch to downloaded quality
             if (kDebugMode) {
               print(
-                  'Auto-selected downloaded quality ($downloadedQuality): $hlsPlaybackUrl');
+                'Auto-selected downloaded quality ($downloadedQuality): $hlsPlaybackUrl',
+              );
             }
           } catch (e) {
             if (kDebugMode) {
               print(
-                  'Error getting HLS playback URL for $downloadedQuality: $e');
+                'Error getting HLS playback URL for $downloadedQuality: $e',
+              );
             }
             hlsPlaybackUrl = null;
           }
@@ -498,7 +511,8 @@ class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
             playingQuality = _currentQuality;
             if (kDebugMode) {
               print(
-                  'Playing downloaded HLS ($_currentQuality): $hlsPlaybackUrl');
+                'Playing downloaded HLS ($_currentQuality): $hlsPlaybackUrl',
+              );
             }
           } catch (e) {
             if (kDebugMode) {
@@ -525,12 +539,14 @@ class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
             _currentQuality = downloadedQuality;
             if (kDebugMode) {
               print(
-                  'Found downloaded quality ($downloadedQuality): $hlsPlaybackUrl');
+                'Found downloaded quality ($downloadedQuality): $hlsPlaybackUrl',
+              );
             }
           } catch (e) {
             if (kDebugMode) {
               print(
-                  'Error getting HLS playback URL for $downloadedQuality: $e');
+                'Error getting HLS playback URL for $downloadedQuality: $e',
+              );
             }
           }
         }
@@ -560,7 +576,8 @@ class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
           // iOS local HTTP server - use networkUrl
           if (kDebugMode) {
             print(
-                'NsPlayer [Init #$currentInitId]: iOS - Initializing from local HTTP server: $hlsPlaybackUrl');
+              'NsPlayer [Init #$currentInitId]: iOS - Initializing from local HTTP server: $hlsPlaybackUrl',
+            );
           }
           _controller = VideoPlayerController.networkUrl(
             Uri.parse(hlsPlaybackUrl),
@@ -572,7 +589,8 @@ class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
           // Android: Play from local temp files
           if (kDebugMode) {
             print(
-                'NsPlayer [Init #$currentInitId]: Initializing from local file: $hlsPlaybackUrl');
+              'NsPlayer [Init #$currentInitId]: Initializing from local file: $hlsPlaybackUrl',
+            );
           }
           _controller = VideoPlayerController.file(
             File(hlsPlaybackUrl),
@@ -603,7 +621,8 @@ class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
 
         if (kDebugMode) {
           print(
-              'NsPlayer [Init #$currentInitId]: Initializing from network ($_currentQuality): $playUrl');
+            'NsPlayer [Init #$currentInitId]: Initializing from network ($_currentQuality): $playUrl',
+          );
         }
         _controller = VideoPlayerController.networkUrl(
           Uri.parse(playUrl),
@@ -614,7 +633,8 @@ class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
         );
       } else {
         throw Exception(
-            'No network connection and no downloaded video available');
+          'No network connection and no downloaded video available',
+        );
       }
 
       if (currentInitId != _initCounter) {
@@ -703,7 +723,8 @@ class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
       _retryCount++;
 
       // Check if this is a rate limiting error (HTTP 429)
-      final isRateLimitError = e.toString().contains('429') ||
+      final isRateLimitError =
+          e.toString().contains('429') ||
           e.toString().contains('rate') ||
           e.toString().contains('-16845');
 
@@ -748,7 +769,8 @@ class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
           final waitSeconds = 2 * _retryCount; // 2s, 4s for faster recovery
           if (kDebugMode) {
             print(
-                'NsPlayer: General error - retrying in ${waitSeconds}s... (attempt $_retryCount/$_maxAutoRetries)');
+              'NsPlayer: General error - retrying in ${waitSeconds}s... (attempt $_retryCount/$_maxAutoRetries)',
+            );
           }
           await Future.delayed(Duration(seconds: waitSeconds));
           if (mounted) {
@@ -844,7 +866,8 @@ class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
     // Throttling: Only execute heavy logic and UI updates every 2 seconds
     // to reduce CPU usage. Critical events (buffering start/end, completion)
     // are still processed immediately.
-    final bool isCriticalEvent = (value.isBuffering != _isBuffering) ||
+    final bool isCriticalEvent =
+        (value.isBuffering != _isBuffering) ||
         (value.position >= value.duration &&
             value.duration.inSeconds > 0 &&
             !value.isPlaying);
@@ -940,10 +963,7 @@ class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
         print('Has Authorization: ${headers.containsKey('Authorization')}');
       }
 
-      final response = await http.get(
-        Uri.parse(apiUrl),
-        headers: headers,
-      );
+      final response = await http.get(Uri.parse(apiUrl), headers: headers);
 
       if (response.statusCode != 200) {
         if (kDebugMode) {
@@ -985,18 +1005,21 @@ class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
         final bandwidth = qualityData['bandwidth'] as int?;
 
         if (quality != null && url != null) {
-          qualities.add(M3U8Data(
-            dataQuality: quality,
-            dataURL: url,
-            fileSize: sizeBytes,
-            bandwidth: bandwidth,
-            width: width,
-            height: height,
-          ));
+          qualities.add(
+            M3U8Data(
+              dataQuality: quality,
+              dataURL: url,
+              fileSize: sizeBytes,
+              bandwidth: bandwidth,
+              width: width,
+              height: height,
+            ),
+          );
 
           if (kDebugMode) {
             print(
-                'Added quality: $quality (${width}x$height) - ${sizeBytes ?? 0} bytes');
+              'Added quality: $quality (${width}x$height) - ${sizeBytes ?? 0} bytes',
+            );
           }
         }
       }
@@ -1018,17 +1041,12 @@ class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
 
   Future<void> _fetchQualities(String url) async {
     try {
-      final response = await http.get(
-        Uri.parse(url),
-        headers: widget.headers,
-      );
+      final response = await http.get(Uri.parse(url), headers: widget.headers);
 
       if (response.statusCode != 200) return;
 
       final content = utf8.decode(response.bodyBytes);
-      final qualities = <M3U8Data>[
-        M3U8Data(dataQuality: 'Auto', dataURL: url),
-      ];
+      final qualities = <M3U8Data>[M3U8Data(dataQuality: 'Auto', dataURL: url)];
 
       if (kDebugMode) {
         print('Fetching qualities from manifest at $url');
@@ -1083,15 +1101,17 @@ class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
             height = int.tryParse(parts[1]);
           }
 
-          qualities.add(M3U8Data(
-            dataQuality: resolution ?? 'Unknown',
-            dataURL: fullUrl,
-            fileSize: fileSize != null ? int.tryParse(fileSize) : null,
-            bandwidth: bandwidth != null ? int.tryParse(bandwidth) : null,
-            width: width,
-            height: height,
-            fps: frameRate != null ? int.tryParse(frameRate) : null,
-          ));
+          qualities.add(
+            M3U8Data(
+              dataQuality: resolution ?? 'Unknown',
+              dataURL: fullUrl,
+              fileSize: fileSize != null ? int.tryParse(fileSize) : null,
+              bandwidth: bandwidth != null ? int.tryParse(bandwidth) : null,
+              width: width,
+              height: height,
+              fps: frameRate != null ? int.tryParse(frameRate) : null,
+            ),
+          );
 
           currentStreamInfo = null;
         }
@@ -1157,8 +1177,9 @@ class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
     final fromPosition = _controller!.value.position.inSeconds.toDouble();
     final newPosition =
         _controller!.value.position - const Duration(seconds: 10);
-    final actualNewPosition =
-        newPosition < Duration.zero ? Duration.zero : newPosition;
+    final actualNewPosition = newPosition < Duration.zero
+        ? Duration.zero
+        : newPosition;
 
     _controller!.seekTo(actualNewPosition);
 
@@ -1231,8 +1252,10 @@ class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _onQualitySelected(M3U8Data quality,
-      {QualityChangeReason reason = QualityChangeReason.user}) async {
+  Future<void> _onQualitySelected(
+    M3U8Data quality, {
+    QualityChangeReason reason = QualityChangeReason.user,
+  }) async {
     if (quality.dataQuality == _currentQuality) return;
     if (_controller == null) return;
 
@@ -1279,7 +1302,8 @@ class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
       // Offline and quality not downloaded - cannot switch
       if (kDebugMode) {
         print(
-            'Cannot switch to ${quality.dataQuality} - offline and not downloaded');
+          'Cannot switch to ${quality.dataQuality} - offline and not downloaded',
+        );
       }
       // Restore previous quality
       setState(() {
@@ -1371,10 +1395,7 @@ class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
       textDirection: TextDirection.ltr,
       child: AspectRatio(
         aspectRatio: widget.aspectRatio,
-        child: Container(
-          color: Colors.black,
-          child: _buildContent(),
-        ),
+        child: Container(color: Colors.black, child: _buildContent()),
       ),
     );
   }
@@ -1385,9 +1406,7 @@ class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
     }
 
     if (!_isInitialized || _controller == null) {
-      return VideoLoadingAnimation(
-        primaryColor: widget.primaryColor,
-      );
+      return VideoLoadingAnimation(primaryColor: widget.primaryColor);
     }
 
     return Stack(
@@ -1476,10 +1495,7 @@ class _NsPlayerState extends State<NsPlayer> with WidgetsBindingObserver {
           TextButton.icon(
             onPressed: () => _initializePlayer(isManualRetry: true),
             icon: const Icon(Icons.refresh_rounded, color: Colors.white),
-            label: const Text(
-              'Retry',
-              style: TextStyle(color: Colors.white),
-            ),
+            label: const Text('Retry', style: TextStyle(color: Colors.white)),
             style: TextButton.styleFrom(
               backgroundColor: Colors.white.withValues(alpha: 0.1),
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),

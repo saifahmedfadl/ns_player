@@ -369,11 +369,18 @@ class LocalHlsPlaybackManager {
       }
 
       // Decrypt to temp file using VideoEncryptionService
-      await _decryptToFile(
-        source: encryptedSegment,
-        destination: File('${playbackDir.path}/$segmentName.ts'),
-        videoId: videoId,
-      );
+      try {
+        await _decryptToFile(
+          source: encryptedSegment,
+          destination: File('${playbackDir.path}/$segmentName.ts'),
+          videoId: videoId,
+        );
+      } catch (e) {
+        if (kDebugMode) {
+          print('LocalHlsPlaybackManager: Failed to decrypt segment $segmentName: $e');
+        }
+        return null; // Incomplete or corrupted download
+      }
     }
 
     // Write manifest with local file paths
@@ -407,6 +414,20 @@ class LocalHlsPlaybackManager {
     required File destination,
     required String videoId,
   }) async {
+    // Ensure source exists before reading
+    if (!await source.exists()) {
+      if (kDebugMode) {
+        print('LocalHlsPlaybackManager: Source file not found: ${source.path}');
+      }
+      throw PathNotFoundException(source.path, const OSError('Source file not found'));
+    }
+
+    // Ensure destination directory exists
+    final destDir = destination.parent;
+    if (!await destDir.exists()) {
+      await destDir.create(recursive: true);
+    }
+
     // Read encrypted data
     final encryptedData = await source.readAsBytes();
 
